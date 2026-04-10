@@ -45,7 +45,6 @@
         .keys-table td { padding: 15px; border-bottom: 1px solid rgba(255,255,255,0.02); font-size: 14px; }
 
         .key-text { font-family: monospace; background: rgba(157, 0, 255, 0.1); padding: 4px 8px; border-radius: 5px; color: #e0b0ff; }
-        .hwid-text { color: #888; font-size: 12px; }
         
         .badge { padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; }
         .badge-active { background: rgba(0, 255, 136, 0.1); color: #00ff88; }
@@ -53,25 +52,28 @@
 
         .action-btn { 
             padding: 6px 10px; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; 
-            background: transparent; color: #fff; cursor: pointer; margin-right: 5px; font-size: 12px;
+            background: rgba(255,255,255,0.02); color: #fff; cursor: pointer; margin-right: 5px; font-size: 11px;
+            transition: 0.2s;
         }
+        .action-btn:hover { background: rgba(255,255,255,0.1); border-color: #fff; }
         .btn-ban { border-color: var(--warning); color: var(--warning); }
         .btn-delete { border-color: var(--danger); color: var(--danger); }
-        .action-btn:hover { background: rgba(255, 255, 255, 0.05); }
+        
+        .hwid-tag { font-family: monospace; color: #00e5ff; font-weight: 700; font-size: 11px; display: block; max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
             <div class="logo">REAPER AUTH V2</div>
-            <div>Admin Dashboard</div>
+            <div>Admin Dashboard - Advanced Authentication</div>
         </header>
 
         <div class="main-grid">
             <div class="card">
-                <h2>Generate</h2>
+                <h2>Generate Keys</h2>
                 <div class="form-group">
-                    <label>Duration</label>
+                    <label>License Duration</label>
                     <select id="duration">
                         <option value="1">1 Day</option>
                         <option value="7">7 Days</option>
@@ -79,11 +81,12 @@
                         <option value="999">Lifetime</option>
                     </select>
                 </div>
-                <button class="btn" onclick="generateKey()">Create Key</button>
+                <button class="btn" onclick="generateKey()">Create New License</button>
+                <div id="newKeyDisplay" style="margin-top:20px; text-align:center;"></div>
             </div>
 
             <div class="card">
-                <h2>Licenses</h2>
+                <h2>License Management</h2>
                 <div class="table-container">
                     <table class="keys-table">
                         <thead>
@@ -104,30 +107,35 @@
 
     <script>
         async function fetchKeys() {
-            const res = await fetch('/admin/keys');
-            const keys = await res.json();
-            const list = document.getElementById('keysList');
-            list.innerHTML = '';
-            
-            keys.reverse().forEach(k => {
-                const expiryStr = new Date(k.expiry).toLocaleDateString();
-                const statusClass = k.status === 'active' ? 'badge-active' : 'badge-banned';
+            try {
+                const res = await fetch('/admin/keys');
+                const keys = await res.json();
+                const list = document.getElementById('keysList');
+                list.innerHTML = '';
                 
-                list.innerHTML += `
-                    <tr>
-                        <td><span class="key-text">${k.key}</span></td>
-                        <td><span class="hwid-text">${k.hwid || 'NOT LINKED'}</span></td>
-                        <td>${expiryStr}</td>
-                        <td><span class="badge ${statusClass}">${k.status.toUpperCase()}</span></td>
-                        <td>
-                            <button class="action-btn btn-ban" onclick="setStatus('${k.key}', '${k.status === 'active' ? 'banned' : 'active'}')">
-                                ${k.status === 'active' ? 'Ban' : 'Unban'}
-                            </button>
-                            <button class="action-btn btn-delete" onclick="deleteKey('${k.key}')">Remove</button>
-                        </td>
-                    </tr>
-                `;
-            });
+                keys.reverse().forEach(k => {
+                    const expiryStr = new Date(k.expiry).toLocaleDateString();
+                    const statusClass = k.status === 'active' ? 'badge-active' : 'badge-banned';
+                    
+                    list.innerHTML += `
+                        <tr>
+                            <td><span class="key-text">${k.key}</span></td>
+                            <td><span class="hwid-tag" title="${k.hwid}">${k.hwid || 'NOT LINKED'}</span></td>
+                            <td>${expiryStr}</td>
+                            <td><span class="badge ${statusClass}">${k.status.toUpperCase()}</span></td>
+                            <td>
+                                <button class="action-btn" onclick="resetHWID('${k.key}')">Reset HWID</button>
+                                <button class="action-btn btn-ban" onclick="setStatus('${k.key}', '${k.status === 'active' ? 'banned' : 'active'}')">
+                                    ${k.status === 'active' ? 'Ban' : 'Unban'}
+                                </button>
+                                <button class="action-btn btn-delete" onclick="deleteKey('${k.key}')">Remove</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+            } catch (e) {
+                console.error("Failed to fetch keys", e);
+            }
         }
 
         async function setStatus(key, status) {
@@ -139,8 +147,18 @@
             fetchKeys();
         }
 
+        async function resetHWID(key) {
+            if(!confirm('This will allow the key to be used on a different computer. Continue?')) return;
+            await fetch('/admin/reset', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key })
+            });
+            fetchKeys();
+        }
+
         async function deleteKey(key) {
-            if(!confirm('Are you sure?')) return;
+            if(!confirm('Are you sure you want to permanently delete this key?')) return;
             await fetch('/admin/delete', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -151,16 +169,23 @@
 
         async function generateKey() {
             const days = document.getElementById('duration').value;
-            await fetch('/admin/generate', {
+            const res = await fetch('/admin/generate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ days })
             });
-            fetchKeys();
+            const data = await res.json();
+            if(data.success) {
+                document.getElementById('newKeyDisplay').innerHTML = `<span class="key-text">${data.key}</span>`;
+                fetchKeys();
+            }
         }
 
         fetchKeys();
-        setInterval(fetchKeys, 10000);
+        setInterval(fetchKeys, 5000);
     </script>
+</body>
+</html>
+
 </body>
 </html>
