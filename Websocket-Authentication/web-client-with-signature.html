@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Client with Signature Verification</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        #messages {
+            border: 1px solid #ccc;
+            padding: 10px;
+            height: 300px;
+            overflow-y: auto;
+            margin-bottom: 10px;
+            background-color: #f9f9f9;
+        }
+        .success {
+            color: green;
+        }
+        .error {
+            color: red;
+        }
+        .info {
+            color: blue;
+        }
+        .warning {
+            color: orange;
+        }
+        button {
+            padding: 8px 16px;
+            margin-right: 10px;
+            cursor: pointer;
+        }
+        input {
+            padding: 8px;
+            width: 200px;
+            margin-right: 10px;
+        }
+        .form-group {
+            margin-bottom: 10px;
+        }
+        label {
+            display: inline-block;
+            width: 100px;
+        }
+        .security-panel {
+            background-color: #f0f0f0;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin-bottom: 20px;
+        }
+        .security-panel h3 {
+            margin-top: 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>WebSocket Client with Signature Verification</h1>
+    
+    <div class="security-panel">
+        <h3>Security Settings</h3>
+        <div class="form-group">
+            <label for="clientId">Client ID:</label>
+            <input type="text" id="clientId" value="client1">
+        </div>
+        
+        <div class="form-group">
+            <label for="clientSecret">Client Secret:</label>
+            <input type="password" id="clientSecret" value="client1_secret_key">
+        </div>
+        
+        <div class="form-group">
+            <label for="serverSecret">Server Secret:</label>
+            <input type="password" id="serverSecret" value="server_secret_key_change_this_in_production">
+        </div>
+    </div>
+    
+    <div class="form-group">
+        <label for="serviceId">Service ID:</label>
+        <input type="text" id="serviceId" value="pandadevkit">
+    </div>
+    
+    <div class="form-group">
+        <label for="hwid">HWID:</label>
+        <input type="text" id="hwid" value="2062f80093066633876b542212c496501a5e79523cc4ea9b28667dff065afd8f">
+    </div>
+    
+    <div class="form-group">
+        <label for="clientKey">Client Key:</label>
+        <input type="text" id="clientKey" value="your_client_key_here">
+    </div>
+    
+    <div>
+        <button id="connectBtn">Connect</button>
+        <button id="disconnectBtn" disabled>Disconnect</button>
+    </div>
+    
+    <div style="margin-top: 20px;">
+        <button id="validateBtn" disabled>Send Validation Request</button>
+        <button id="challengeBtn" disabled>Respond to Challenge</button>
+    </div>
+    
+    <h3>Messages:</h3>
+    <div id="messages"></div>
+    
+    <script>
+        // Crypto functions for signature generation and verification
+        class CryptoHelper {
+            // Generate a signature for a message using HMAC-SHA256
+            static async generateSignature(message, secretKey) {
+                // Convert message to string if it's an object
+                const messageStr = typeof message === 'string' ? message : JSON.stringify(message);
+                
+                // Convert string to ArrayBuffer
+                const encoder = new TextEncoder();
+                const messageData = encoder.encode(messageStr);
+                const keyData = encoder.encode(secretKey);
+                
+                // Import the key
+                const key = await crypto.subtle.importKey(
+                    'raw',
+                    keyData,
+                    { name: 'HMAC', hash: 'SHA-256' },
+                    false,
+                    ['sign']
+                );
+                
+                // Sign the message
+                const signature = await crypto.subtle.sign(
+                    'HMAC',
+                    key,
+                    messageData
+                );
+                
+                // Convert to hex string
+                return Array.from(new Uint8Array(signature))
+                    .map(b => b.toString(16).padStart(2, '0'))
+                    .join('');
+            }
+            
+            // Verify a signature from the server
+            static async verifyServerSignature(message, signature, serverSecretKey) {
+                try {
+                    // Extract the message content (everything except the signature)
+                    const { signature: _, ...messageContent } = message;
+                    
+                    // Generate expected signature
+                    const expectedSignature = await this.generateSignature(messageContent, serverSecretKey);
+                    
+                    // Compare signatures
+                    return expectedSignature === signature;
+                } catch (error) {
+                    console.error('Error verifying signature:', error);
+                    return false;
+                }
+            }
+        }
+        
+        let ws = null;
+        let heartbeatInterval = null;
+        let currentChallengeToken = '';
+        
+        // DOM elements
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const validateBtn = document.getElementById('validateBtn');
+        const challengeBtn = document.getElementById('challengeBtn');
+        const messagesDiv = document.getElementById('messages');
+        const serviceIdInput = document.getElementById('serviceId');
+        const hwidInput = document.getElementById('hwid');
+        const clientKeyInput = document.getElementById('clientKey');
+        const clientIdInput = document.getElementById('clientId');
+        const clientSecretInput = document.getElementById('clientSecret');
+        const serverSecretInput = document.getElementById('serverSecret');
+        
+        // Add message to the messages div
+        function addMessage(message, type = 'info') {
+            const messageElement = document.createElement('div');
+            messageElement.classList.add(type);
+            messageElement.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            messagesDiv.appendChild(messageElement);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+        
+        // Connect to WebSocket server
+        connectBtn.addEventListener('click', async () => {
+            const serviceId = serviceIdInput.value.trim();
+            const hwid = hwidInput.value.trim();
+            const clientKey = clientKeyInput.value.trim();
+            const clientId = clientIdInput.value.trim();
+            
+            if (!serviceId || !hwid || !clientKey || !clientId) {
+                addMessage('Please fill in all required fields', 'error');
+                return;
+            }
+            
+            // Create WebSocket connection
+            const wsUrl = `ws://localhost:3000/?serviceId=${encodeURIComponent(serviceId)}&hwid=${encodeURIComponent(hwid)}&key=${encodeURIComponent(clientKey)}&clientId=${encodeURIComponent(clientId)}`;
+            
+            try {
+                ws = new WebSocket(wsUrl);
+                
+                ws.onopen = () => {
+                    addMessage('Connected to WebSocket server', 'success');
+                    connectBtn.disabled = true;
+                    disconnectBtn.disabled = false;
+                    validateBtn.disabled = false;
+                    challengeBtn.disabled = false;
+                    
+                    // Start heartbeat
+                    heartbeatInterval = setInterval(async () => {
+                        if (ws && ws.readyState === WebSocket.OPEN) {
+                            // Create heartbeat message
+                            const heartbeatMessage = {
+                                type: 'heartbeat',
+                                timestamp: Date.now()
+                            };
+                            
+                            // Add challenge response if we have a token
+                            if (currentChallengeToken) {
+                                heartbeatMessage.challengeResponse = await CryptoHelper.generateSignature(
+                                    currentChallengeToken, 
+                                    clientSecretInput.value
+                                );
+                            }
+                            
+                            // Generate signature
+                            const signature = await CryptoHelper.generateSignature(
+                                heartbeatMessage, 
+                                clientSecretInput.value
+                            );
+                            
+                            // Send the message with signature
+                            ws.send(JSON.stringify({
+                                ...heartbeatMessage,
+                                signature
+                            }));
+                            
+                            addMessage('Sent heartbeat');
+                        }
+                    }, 25000); // 25 seconds
+                };
+                
+                ws.onmessage = async (event) => {
+                    try {
+                        const message = JSON.parse(event.data);
+                        
+                        // Extract signature
+                        const { signature, ...messageContent } = message;
+                        
+                        // Verify server signature
+                        if (!signature) {
+                            addMessage('Warning: Server message missing signature!', 'warning');
+                        } else {
+                            const isValidSignature = await CryptoHelper.verifyServerSignature(
+                                message, 
+                                signature, 
+                                serverSecretInput.value
+                            );
+                            
+                            if (!isValidSignature) {
+                                addMessage('Warning: Invalid server signature! Possible security breach.', 'error');
+                                return; // Don't process messages with invalid signatures
+                            }
+                        }
+                        
+                        if (message.type === 'validation_response') {
+                            if (message.success) {
+                                addMessage(`Validation successful: ${message.message}`, 'success');
+                                
+                                // Store the challenge token if provided
+                                if (message.challengeToken) {
+                                    currentChallengeToken = message.challengeToken;
+                                    addMessage('Received new challenge token', 'info');
+                                }
+                            } else {
+                                addMessage(`Validation failed: ${message.message}`, 'error');
+                            }
+                            
+                            // Display full response data
+                            addMessage(`Response data: ${JSON.stringify(message.data)}`, 'info');
+                        } else if (message.type === 'welcome') {
+                            addMessage(`${message.message} (Client ID: ${message.clientId})`, 'info');
+                            
+                            // Store initial challenge token
+                            if (message.challengeToken) {
+                                currentChallengeToken = message.challengeToken;
+                                addMessage('Received initial challenge token', 'info');
+                            }
+                        } else if (message.type === 'heartbeat_response') {
+                            addMessage(`Received heartbeat response`, 'info');
+                            
+                            // Update challenge token if provided
+                            if (message.challengeToken) {
+                                currentChallengeToken = message.challengeToken;
+                            }
+                        } else if (message.type === 'challenge_success') {
+                            addMessage(`Challenge verified: ${message.message}`, 'success');
+                            
+                            // Update challenge token if provided
+                            if (message.newChallengeToken) {
+                                currentChallengeToken = message.newChallengeToken;
+                                addMessage('Received new challenge token', 'info');
+                            }
+                        } else if (message.type === 'error') {
+                            addMessage(`Error from server: ${message.message}`, 'error');
+                        } else {
+                            addMessage(`Received message: ${JSON.stringify(messageContent)}`, 'info');
+                        }
+                    } catch (error) {
+                        addMessage(`Error parsing message: ${error.message}`, 'error');
+                    }
+                };
+                
+                ws.onclose = () => {
+                    addMessage('Disconnected from WebSocket server', 'error');
+                    connectBtn.disabled = false;
+                    disconnectBtn.disabled = true;
+                    validateBtn.disabled = true;
+                    challengeBtn.disabled = true;
+                    
+                    clearInterval(heartbeatInterval);
+                    ws = null;
+                };
+                
+                ws.onerror = (error) => {
+                    addMessage(`WebSocket error: ${error.message}`, 'error');
+                };
+            } catch (error) {
+                addMessage(`Connection error: ${error.message}`, 'error');
+            }
+        });
+        
+        // Disconnect from WebSocket server
+        disconnectBtn.addEventListener('click', () => {
+            if (ws) {
+                ws.close();
+            }
+        });
+        
+        // Send validation request
+        validateBtn.addEventListener('click', async () => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const serviceId = serviceIdInput.value.trim();
+                const hwid = hwidInput.value.trim();
+                const clientKey = clientKeyInput.value.trim();
+                
+                // Create validation request
+                const validationRequest = {
+                    type: 'validate',
+                    serviceId: serviceId,
+                    hwid: hwid,
+                    key: clientKey
+                };
+                
+                // Generate signature
+                const signature = await CryptoHelper.generateSignature(
+                    validationRequest, 
+                    clientSecretInput.value
+                );
+                
+                // Send validation request with signature
+                ws.send(JSON.stringify({
+                    ...validationRequest,
+                    signature
+                }));
+                
+                addMessage('Sent validation request');
+            } else {
+                addMessage('Not connected to WebSocket server', 'error');
+            }
+        });
+        
+        // Send challenge response
+        challengeBtn.addEventListener('click', async () => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                if (!currentChallengeToken) {
+                    addMessage('No active challenge token available', 'warning');
+                    return;
+                }
+                
+                // Create challenge response
+                const challengeResponse = {
+                    type: 'challenge_response',
+                    response: await CryptoHelper.generateSignature(
+                        currentChallengeToken, 
+                        clientSecretInput.value
+                    )
+                };
+                
+                // Generate signature
+                const signature = await CryptoHelper.generateSignature(
+                    challengeResponse, 
+                    clientSecretInput.value
+                );
+                
+                // Send challenge response with signature
+                ws.send(JSON.stringify({
+                    ...challengeResponse,
+                    signature
+                }));
+                
+                addMessage('Sent challenge response');
+            } else {
+                addMessage('Not connected to WebSocket server', 'error');
+            }
+        });
+    </script>
+</body>
+</html>

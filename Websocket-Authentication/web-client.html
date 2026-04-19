@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Client</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        #messages {
+            border: 1px solid #ccc;
+            padding: 10px;
+            height: 300px;
+            overflow-y: auto;
+            margin-bottom: 10px;
+            background-color: #f9f9f9;
+        }
+        .success {
+            color: green;
+        }
+        .error {
+            color: red;
+        }
+        .info {
+            color: blue;
+        }
+        button {
+            padding: 8px 16px;
+            margin-right: 10px;
+            cursor: pointer;
+        }
+        input {
+            padding: 8px;
+            width: 200px;
+            margin-right: 10px;
+        }
+        .form-group {
+            margin-bottom: 10px;
+        }
+        label {
+            display: inline-block;
+            width: 100px;
+        }
+    </style>
+</head>
+<body>
+    <h1>WebSocket Client</h1>
+    
+    <div class="form-group">
+        <label for="serviceId">Service ID:</label>
+        <input type="text" id="serviceId" value="pandadevkit">
+    </div>
+    
+    <div class="form-group">
+        <label for="hwid">HWID:</label>
+        <input type="text" id="hwid" value="2062f80093066633876b542212c496501a5e79523cc4ea9b28667dff065afd8f">
+    </div>
+    
+    <div class="form-group">
+        <label for="clientKey">Client Key:</label>
+        <input type="text" id="clientKey" value="your_client_key_here">
+    </div>
+    
+    <div>
+        <button id="connectBtn">Connect</button>
+        <button id="disconnectBtn" disabled>Disconnect</button>
+    </div>
+    
+    <div style="margin-top: 20px;">
+        <button id="validateBtn" disabled>Send Validation Request</button>
+    </div>
+    
+    <h3>Messages:</h3>
+    <div id="messages"></div>
+    
+    <script>
+        let ws = null;
+        let heartbeatInterval = null;
+        
+        // DOM elements
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const validateBtn = document.getElementById('validateBtn');
+        const messagesDiv = document.getElementById('messages');
+        const serviceIdInput = document.getElementById('serviceId');
+        const hwidInput = document.getElementById('hwid');
+        const clientKeyInput = document.getElementById('clientKey');
+        
+        // Add message to the messages div
+        function addMessage(message, type = 'info') {
+            const messageElement = document.createElement('div');
+            messageElement.classList.add(type);
+            messageElement.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            messagesDiv.appendChild(messageElement);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+        
+        // Connect to WebSocket server
+        connectBtn.addEventListener('click', () => {
+            const serviceId = serviceIdInput.value.trim();
+            const hwid = hwidInput.value.trim();
+            const clientKey = clientKeyInput.value.trim();
+            
+            if (!serviceId || !hwid || !clientKey) {
+                addMessage('Please fill in all fields', 'error');
+                return;
+            }
+            
+            // Create WebSocket connection
+            const wsUrl = `ws://localhost:3000/?serviceId=${encodeURIComponent(serviceId)}&hwid=${encodeURIComponent(hwid)}&key=${encodeURIComponent(clientKey)}`;
+            
+            try {
+                ws = new WebSocket(wsUrl);
+                
+                ws.onopen = () => {
+                    addMessage('Connected to WebSocket server', 'success');
+                    connectBtn.disabled = true;
+                    disconnectBtn.disabled = false;
+                    validateBtn.disabled = false;
+                    
+                    // Start heartbeat
+                    heartbeatInterval = setInterval(() => {
+                        if (ws && ws.readyState === WebSocket.OPEN) {
+                            ws.send(JSON.stringify({ type: 'heartbeat' }));
+                            addMessage('Sent heartbeat');
+                        }
+                    }, 25000); // 25 seconds
+                };
+                
+                ws.onmessage = (event) => {
+                    try {
+                        const message = JSON.parse(event.data);
+                        
+                        if (message.type === 'validation_response') {
+                            if (message.success) {
+                                addMessage(`Validation successful: ${message.message}`, 'success');
+                            } else {
+                                addMessage(`Validation failed: ${message.message}`, 'error');
+                            }
+                            
+                            // Display full response data
+                            addMessage(`Response data: ${JSON.stringify(message.data)}`, 'info');
+                        } else if (message.type === 'welcome') {
+                            addMessage(`${message.message} (Client ID: ${message.clientId})`, 'info');
+                        } else if (message.type === 'heartbeat_response') {
+                            addMessage(`Received heartbeat response`, 'info');
+                        } else {
+                            addMessage(`Received message: ${JSON.stringify(message)}`, 'info');
+                        }
+                    } catch (error) {
+                        addMessage(`Error parsing message: ${error.message}`, 'error');
+                    }
+                };
+                
+                ws.onclose = () => {
+                    addMessage('Disconnected from WebSocket server', 'error');
+                    connectBtn.disabled = false;
+                    disconnectBtn.disabled = true;
+                    validateBtn.disabled = true;
+                    
+                    clearInterval(heartbeatInterval);
+                    ws = null;
+                };
+                
+                ws.onerror = (error) => {
+                    addMessage(`WebSocket error: ${error.message}`, 'error');
+                };
+            } catch (error) {
+                addMessage(`Connection error: ${error.message}`, 'error');
+            }
+        });
+        
+        // Disconnect from WebSocket server
+        disconnectBtn.addEventListener('click', () => {
+            if (ws) {
+                ws.close();
+            }
+        });
+        
+        // Send validation request
+        validateBtn.addEventListener('click', () => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const serviceId = serviceIdInput.value.trim();
+                const hwid = hwidInput.value.trim();
+                const clientKey = clientKeyInput.value.trim();
+                
+                ws.send(JSON.stringify({
+                    type: 'validate',
+                    serviceId: serviceId,
+                    hwid: hwid,
+                    key: clientKey
+                }));
+                
+                addMessage('Sent validation request');
+            } else {
+                addMessage('Not connected to WebSocket server', 'error');
+            }
+        });
+    </script>
+</body>
+</html>
