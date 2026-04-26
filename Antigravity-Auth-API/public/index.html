@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>REAPER.LOL // AUTH CENTER</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/particles.js/2.0.0/particles.min.js"></script>
+    <style>
+        :root { 
+            --bg: #030303; 
+            --sidebar: #050505; 
+            --accent: #00FFAA; 
+            --accent-glow: rgba(0, 255, 170, 0.4); 
+            --danger: #FF3333;
+            --text: #e0e0e0; 
+            --glass: rgba(10, 10, 10, 0.6); 
+            --border: rgba(0, 255, 170, 0.2);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Share Tech Mono', monospace; }
+        body { background: var(--bg); color: var(--text); display: flex; min-height: 100vh; overflow-x: hidden; position: relative; }
+        
+        #particles-js { position: absolute; width: 100%; height: 100%; z-index: -1; top: 0; left: 0; opacity: 0.3; }
+
+        /* Hacker Sidebar */
+        nav { width: 320px; background: rgba(5,5,5,0.8); backdrop-filter: blur(20px); padding: 40px 20px; border-right: 1px solid var(--border); box-shadow: 5px 0 30px rgba(0,0,0,0.8); z-index: 10; position: relative; }
+        
+        .logo { font-family: 'Orbitron', sans-serif; font-size: 32px; font-weight: 900; color: var(--accent); margin-bottom: 50px; text-shadow: 0 0 25px var(--accent-glow); text-align: center; letter-spacing: 2px; }
+        .logo::after { content: ' ADMIN_PORTAL.EXE'; display: block; font-size: 10px; letter-spacing: 4px; color: #555; margin-top: 5px; }
+
+        .nav-link { padding: 18px 25px; border-radius: 4px; cursor: pointer; color: rgba(255,255,255,0.5); margin-bottom: 10px; transition: 0.2s; font-weight: bold; font-size: 15px; position: relative; border-left: 0px solid var(--accent); }
+        .nav-link:hover, .nav-link.active { background: rgba(0, 255, 170, 0.05); color: var(--accent); border-left: 4px solid var(--accent); padding-left: 30px; }
+        .nav-link::before { content: '>'; position: absolute; left: 10px; opacity: 0; transition: 0.2s; color: var(--accent); }
+        .nav-link.active::before { opacity: 1; }
+
+        /* Glitch Effect */
+        .glitch-hover:hover { animation: glitch 0.2s linear infinite; }
+        @keyframes glitch {
+            0% { transform: translate(0) }
+            20% { transform: translate(-2px, 2px) }
+            40% { transform: translate(-2px, -2px) }
+            60% { transform: translate(2px, 2px) }
+            80% { transform: translate(2px, -2px) }
+            100% { transform: translate(0) }
+        }
+
+        /* Area Principal */
+        main { flex: 1; padding: 50px 70px; z-index: 5; position: relative; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; animation: scanline 1s forwards; }
+        @keyframes scanline { from { opacity: 0; clip-path: inset(100% 0 0 0); } to { opacity: 1; clip-path: inset(0 0 0 0); } }
+
+        /* Paneles Estilo Terminal */
+        .glass-panel { background: var(--glass); border: 1px solid var(--border); border-radius: 4px; padding: 35px; margin-bottom: 30px; backdrop-filter: blur(15px); position: relative; overflow: hidden; box-shadow: inset 0 0 50px rgba(0,0,0,0.5); }
+        .glass-panel::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 2px; background: linear-gradient(90deg, transparent, var(--accent), transparent); opacity: 0.5; }
+
+        h1 { font-family: 'Orbitron', sans-serif; font-size: 32px; margin-bottom: 30px; letter-spacing: 2px; text-transform: uppercase; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 15px; }
+
+        /* Forms CYBERPUNK */
+        .form-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; align-items: flex-end; }
+        .input-group { display: flex; flex-direction: column; gap: 8px; }
+        .input-group label { font-size: 11px; color: var(--accent); text-transform: uppercase; letter-spacing: 1px; font-weight: bold; }
+        input { background: rgba(0,0,0,0.5); border: 1px solid rgba(0,255,170,0.2); padding: 15px; border-radius: 2px; color: #fff; outline: none; transition: 0.3s; font-family: 'Share Tech Mono', monospace; font-size: 14px; }
+        input:focus { border-color: var(--accent); box-shadow: 0 0 10px var(--accent-glow); background: rgba(0,255,170,0.05); }
+        
+        .btn { background: transparent; border: 1px solid var(--accent); padding: 15px 30px; border-radius: 2px; color: var(--accent); font-weight: bold; cursor: pointer; transition: 0.2s; width: 100%; text-transform: uppercase; letter-spacing: 2px; font-family: 'Orbitron', sans-serif;}
+        .btn:hover { background: var(--accent); color: #000; box-shadow: 0 0 20px var(--accent-glow); }
+        .btn-danger { border-color: var(--danger); color: var(--danger); }
+        .btn-danger:hover { background: var(--danger); color: #fff; box-shadow: 0 0 20px rgba(255,51,51,0.5); }
+
+        /* Tablas Data */
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; background: rgba(0,0,0,0.3); }
+        th { text-align: left; padding: 15px; font-size: 12px; color: var(--accent); text-transform: uppercase; border-bottom: 1px solid var(--border); letter-spacing: 1px; }
+        td { padding: 15px; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 14px; }
+        tr:hover td { background: rgba(0,255,170,0.02); }
+        .key-style { color: #fff; letter-spacing: 1px; font-weight: bold;}
+
+        /* Logs Matrix */
+        .log-entry { padding: 10px 15px; border-bottom: 1px solid rgba(0,0,0,0.5); display: flex; justify-content: space-between; font-size: 13px; color: #aaa; }
+        .log-entry:nth-child(even) { background: rgba(255,255,255,0.02); }
+        .log-date { color: #555; }
+        .log-event { font-weight: bold; color: var(--accent); display: inline-block; width: 150px; }
+        .log-event.AUTH_FAILED { color: var(--danger); }
+        
+        /* Stats Headers */
+        .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 30px; }
+        .stat-box { background: rgba(0,0,0,0.5); border: 1px solid var(--border); padding: 20px; border-left: 4px solid var(--accent); }
+        .stat-value { font-family: 'Orbitron', sans-serif; font-size: 32px; color: #fff; text-shadow: 0 0 10px var(--accent-glow); margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <div id="particles-js"></div>
+    <nav>
+        <div class="logo glitch-hover">REAPER.LOL</div>
+        <div class="nav-link active" onclick="showTab('dashboard')">SYS_DASHBOARD</div>
+        <div class="nav-link" onclick="showTab('keys')">LICENSE_MANAGER</div>
+        <div class="nav-link" onclick="showTab('logs')">SERVER_LOGS</div>
+        <div class="nav-link" onclick="showTab('bans')">FIREWALL_BANS</div>
+    </nav>
+
+    <main>
+        <!-- DASHBOARD (NOVEDAD) -->
+        <div id="dashboard" class="tab-content active">
+            <h1>SYSTEM OVERVIEW</h1>
+            <div class="stat-grid">
+                <div class="stat-box">
+                    <div style="color:var(--accent); font-size: 12px; font-weight:bold;">TOTAL USERS</div>
+                    <div class="stat-value" id="stat-total">0</div>
+                </div>
+                <div class="stat-box">
+                    <div style="color:var(--accent); font-size: 12px; font-weight:bold;">ACTIVE KEYS</div>
+                    <div class="stat-value" id="stat-active">0</div>
+                </div>
+                <div class="stat-box" style="border-left-color: var(--danger);">
+                    <div style="color:var(--danger); font-size: 12px; font-weight:bold;">BANNED ENGINES</div>
+                    <div class="stat-value" id="stat-bans">0</div>
+                </div>
+            </div>
+            
+            <div class="glass-panel">
+                <h2>LATEST AUTHENTICATIONS</h2>
+                <div id="recent-auth-list" style="margin-top:20px; font-size:12px;"></div>
+            </div>
+        </div>
+
+        <!-- PESTAÑA LICENCIAS -->
+        <div id="keys" class="tab-content">
+            <h1>LICENSE DATABASE</h1>
+            <div class="glass-panel">
+                <h2 style="font-size:16px; margin-bottom: 20px; color:#aaa;">> INITIALIZE_KEY_GENERATOR</h2>
+                <div class="form-row">
+                    <div class="input-group"><label>LIFESPAN (DAYS)</label><input type="number" id="days" value="30"></div>
+                    <div class="input-group"><label>HWID LIMIT</label><input type="number" id="usages" value="1"></div>
+                    <div class="input-group"><label>BATCH AMOUNT</label><input type="number" id="amount" value="1"></div>
+                    <div class="input-group"><label>DATA FLAG</label><input type="text" id="note" placeholder="VIP User"></div>
+                </div>
+                <button class="btn" style="margin-top: 25px;" onclick="bulkGen()">EXECUTE GENERATION PROTOCOL</button>
+            </div>
+
+            <div class="glass-panel">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
+                    <h2 style="font-size:16px; color:#aaa;">> REGISTERED_KEYS</h2>
+                    <button class="btn" onclick="copyAllKeys()" style="width:auto; padding: 10px 20px; font-size: 12px;">Export Keys to Clipboard</button>
+                </div>
+                <table>
+                    <thead>
+                        <tr><th>ENCRYPTED LICENSE</th><th>EXPIRY_FLAG</th><th>HWID_SLOTS</th><th>ACTIONS</th></tr>
+                    </thead>
+                    <tbody id="key-table"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- PESTAÑA LOGS -->
+        <div id="logs" class="tab-content">
+            <h1>SERVER LOGS</h1>
+            <div class="glass-panel" style="padding: 0;">
+                <div id="log-list" style="height: 600px; overflow-y: auto;">
+                    <!-- Logs here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- PESTAÑA BANS -->
+        <div id="bans" class="tab-content">
+            <h1>FIREWALL / BLACKLIST</h1>
+            <div class="glass-panel">
+                <h2 style="font-size:16px; margin-bottom:20px; color:#aaa;">> INJECT_HWID_BAN</h2>
+                <div class="form-row">
+                    <div class="input-group"><label>TARGET ID/IP</label><input type="text" id="ban-target"></div>
+                    <div class="input-group"><label>TYPE (hwid/ip)</label><input type="text" id="ban-type" value="hwid"></div>
+                    <div class="input-group"><label>REASON</label><input type="text" id="ban-reason" placeholder="Cracked Engine"></div>
+                    <button class="btn btn-danger" onclick="addBan()">EXECUTE BAN</button>
+                </div>
+            </div>
+            <div class="glass-panel">
+                <table>
+                    <thead><tr><th>TARGET_DATA</th><th>TYPE</th><th>REASON_FLAG</th><th>TIMESTAMP</th></tr></thead>
+                    <tbody id="ban-rows"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const TOKEN = "antigravity_admin_secret_2026";
+
+        // Particle JS Setup Matrix Effect
+        particlesJS("particles-js", {
+            "particles": { "number": { "value": 80 }, "color": { "value": "#00FFAA" }, "shape": { "type": "circle" }, "opacity": { "value": 0.5 }, "size": { "value": 2 }, "line_linked": { "enable": true, "distance": 150, "color": "#00FFAA", "opacity": 0.2, "width": 1 }, "move": { "enable": true, "speed": 1 } },
+            "interactivity": { "events": { "onhover": { "enable": true, "mode": "grab" } }, "modes": { "grab": { "distance": 140, "line_linked": { "opacity": 1 } } } }
+        });
+
+        function showTab(id) {
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+            event.currentTarget.classList.add('active');
+            loadData();
+        }
+
+        async function loadData() {
+            try {
+                const res = await fetch(`/api/admin/data?token=${TOKEN}`);
+                const data = await res.json();
+                
+                // Dashboard Stats
+                document.getElementById('stat-total').innerText = data.keys.length;
+                document.getElementById('stat-active').innerText = data.keys.filter(k => k.current_usages > 0).length;
+                document.getElementById('stat-bans').innerText = data.bans.length;
+
+                // Dashboard Recent Auth
+                const rAuth = document.getElementById('recent-auth-list');
+                rAuth.innerHTML = '';
+                data.logs.filter(l => l.event.includes('AUTH')).slice(0, 5).forEach(l => {
+                    let color = l.event === "AUTH_SUCCESS" ? "var(--accent)" : "var(--danger)";
+                    rAuth.innerHTML += `<div style="padding:10px; border-left:2px solid ${color}; background:rgba(0,0,0,0.5); margin-bottom:5px; font-family:'Share Tech Mono';"><span style="color:${color}">[${l.event}]</span> ${l.details} | IP_MASK: ${l.ip} | TIME: ${new Date(l.date).toLocaleTimeString()}</div>`;
+                });
+
+                // Render Keys
+                const kTable = document.getElementById('key-table');
+                kTable.innerHTML = '';
+                data.keys.reverse().forEach(k => {
+                    kTable.innerHTML += `<tr>
+                        <td class="key-style">${k.key}</td>
+                        <td>${k.days === 0 ? '<span style="color:var(--accent)">LIFETIME</span>' : k.days + ' DAYS'}</td>
+                        <td>${k.current_usages}/${k.max_usages} SECURED</td>
+                        <td>
+                            <button onclick="resetHwid('${k.key}')" class="btn" style="padding: 5px 10px; font-size:11px; width:auto;">RESET_HWID</button>
+                            <button onclick="deleteKey('${k.key}')" class="btn btn-danger" style="padding: 5px 10px; font-size:11px; width:auto; border:none;">DEL</button>
+                        </td>
+                    </tr>`;
+                });
+
+                // Render Logs
+                const logList = document.getElementById('log-list');
+                logList.innerHTML = '';
+                data.logs.forEach(l => {
+                    let evtClass = l.event === "AUTH_FAILED" ? "AUTH_FAILED" : "";
+                    logList.innerHTML += `<div class="log-entry">
+                        <span><span class="log-event ${evtClass}">[${l.event}]</span> > ${l.details} (IP: ${l.ip})</span>
+                        <span class="log-date">${new Date(l.date).toLocaleString()}</span>
+                    </div>`;
+                });
+
+                // Render Bans
+                const banTable = document.getElementById('ban-rows');
+                banTable.innerHTML = '';
+                data.bans.forEach(b => {
+                    banTable.innerHTML += `<tr><td style="color:var(--danger); font-weight:bold;">${b.target}</td><td>${b.type.toUpperCase()}</td><td>${b.reason}</td><td>${new Date(b.date).toLocaleDateString()}</td></tr>`;
+                });
+            } catch(e) {}
+        }
+
+        async function bulkGen() {
+            const amount = document.getElementById('amount').value;
+            await fetch('/api/admin/keys/bulk', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    token: TOKEN,
+                    days: document.getElementById('days').value,
+                    max_usages: document.getElementById('usages').value,
+                    note: document.getElementById('note').value,
+                    amount: amount
+                })
+            });
+            Swal.fire({title: 'GENERATED', text: `Batch of ${amount} keys compiled.`, icon: 'success', background:'#050505', color:'#00FFAA'});
+            loadData();
+        }
+
+        async function resetHwid(key) {
+            await fetch(`/api/admin/keys/${key}/reset?token=${TOKEN}`, { method: 'POST' });
+            Swal.fire({title: 'RESET', text: 'HWID Lock decoupled.', icon: 'info', background:'#050505', color:'#00FFAA'});
+            loadData();
+        }
+        
+        async function deleteKey(key) {
+            await fetch(`/api/admin/keys/${key}?token=${TOKEN}`, { method: 'DELETE' });
+            loadData();
+        }
+
+        async function addBan() {
+            await fetch('/api/admin/bans', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    token: TOKEN,
+                    target: document.getElementById('ban-target').value,
+                    type: document.getElementById('ban-type').value,
+                    reason: document.getElementById('ban-reason').value
+                })
+            });
+            Swal.fire({title: 'BANNED', text: 'Target Firewall updated.', icon: 'error', background:'#050505', color:'#FF3333'});
+            loadData();
+        }
+
+        async function copyAllKeys() {
+            const res = await fetch(`/api/admin/data?token=${TOKEN}`);
+            const data = await res.json();
+            const keysList = data.keys.map(k => k.key).join('\n');
+            
+            navigator.clipboard.writeText(keysList).then(() => {
+                Swal.fire({
+                    title: 'EXPORTED',
+                    text: `${data.keys.length} keys dumped to clipboard.`,
+                    icon: 'success',
+                    background: '#050505',
+                    color: '#00FFAA',
+                    confirmButtonColor: '#00FFAA'
+                });
+            });
+        }
+
+        loadData();
+        setInterval(loadData, 10000); // Auto refresh
+    </script>
+</body>
+</html>
